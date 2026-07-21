@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-budget-green: #22c55e;
+  --color-budget-red: #ef4444;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
