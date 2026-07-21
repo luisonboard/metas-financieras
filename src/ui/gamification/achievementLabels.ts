@@ -8,4 +8,5 @@ export const ACHIEVEMENT_LABELS: Record<AchievementId, { title: string; descript
   period_closed_surplus: { title: 'Cierre con sobrante', description: 'Cerraste un período con dinero de sobra', icon: '💰' },
   streak_7: { title: 'Racha de 7', description: '7 días seguidos en verde', icon: '🔥' },
   streak_30: { title: 'Racha de 30', description: '30 días seguidos en verde', icon: '🔥🔥' },
+  goal_back_on_track: { title: 'Metas recuperadas', description: 'Sacaste tus metas del atraso', icon: '🎯' },
 }

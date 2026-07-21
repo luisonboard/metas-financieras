@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
+import { format, parseISO } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { useAuthStore } from '../../state/useAuthStore'
 import { useBudgetStore } from '../../state/useBudgetStore'
 import { useGamificationStore } from '../../state/useGamificationStore'
 import { useProfilesStore } from '../../state/useProfilesStore'
-import { cuotaMeta, todayLocalISODate } from '../../domain/budget'
-import { cuotaMetaPorMiembro, goalProgress, reachedMilestones, type Milestone } from '../../domain/goals'
+import { cuotaMeta, disponible, todayLocalISODate } from '../../domain/budget'
+import {
+  cuotaMetaPorMiembro,
+  diasDesvioMetas,
+  fechaEstimadaFin,
+  goalProgress,
+  reachedMilestones,
+  type Milestone,
+} from '../../domain/goals'
 import { celebrate } from '../gamification/confetti'
 import type { Goal } from '../../domain/types'
 
@@ -236,10 +245,16 @@ function GoalCard({ goal }: { goal: Goal }) {
 
   const addGoalContribution = useBudgetStore((s) => s.addGoalContribution)
   const updateGoalStatus = useBudgetStore((s) => s.updateGoalStatus)
+  const period = useBudgetStore((s) => s.period)
+  const extraIncomes = useBudgetStore((s) => s.extraIncomes)
   const expenses = useBudgetStore((s) => s.expenses)
   const goals = useBudgetStore((s) => s.goals)
   const awardXp = useGamificationStore((s) => s.awardXp)
   const unlockAchievements = useGamificationStore((s) => s.unlockAchievements)
+
+  const hoy = todayLocalISODate()
+  const diasDesvio = period ? diasDesvioMetas(disponible(period, goals, extraIncomes, expenses, hoy), goals, hoy) : null
+  const mostrarFechaEstimada = goal.status === 'active' && goal.endDate >= hoy && diasDesvio !== null
 
   const [amount, setAmount] = useState('')
   const [copied, setCopied] = useState(false)
@@ -272,6 +287,7 @@ function GoalCard({ goal }: { goal: Goal }) {
         categorizedExpenseCount: expenses.filter((e) => e.categoryId !== null).length,
         goalsAchievedCount: goals.filter((g) => g.status === 'achieved').length + 1,
         periodClosedWithSurplus: false,
+        goalBackOnTrack: false,
       })
       celebrate()
     }
@@ -296,6 +312,7 @@ function GoalCard({ goal }: { goal: Goal }) {
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
             ${goal.targetAmount.toFixed(2)} objetivo · ${daily.toFixed(2)}/día
           </p>
+          {mostrarFechaEstimada && <FechaEstimada goal={goal} diasDesvio={diasDesvio!} />}
         </div>
         <span
           className={`rounded-full px-2 py-1 text-xs font-medium ${
@@ -355,7 +372,7 @@ function GoalCard({ goal }: { goal: Goal }) {
       )}
 
       {goal.status === 'active' && (
-        <form onSubmit={handleContribute} className="mt-3 flex gap-2">
+        <form onSubmit={handleContribute} className="mt-3 flex flex-wrap gap-2">
           <input
             type="number"
             inputMode="decimal"
@@ -364,23 +381,46 @@ function GoalCard({ goal }: { goal: Goal }) {
             placeholder="Aportar $"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="flex-1 rounded-xl border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
+            className="min-w-0 flex-1 rounded-xl border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
           />
           <button
             type="submit"
-            className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
+            className="shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
           >
             Aportar
           </button>
           <button
             type="button"
             onClick={() => updateGoalStatus(goal.id, 'abandoned')}
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
+            className="shrink-0 rounded-xl border border-neutral-300 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
           >
             Abandonar
           </button>
         </form>
       )}
     </motion.div>
+  )
+}
+
+function FechaEstimada({ goal, diasDesvio }: { goal: Goal; diasDesvio: number }) {
+  const fecha = format(parseISO(fechaEstimadaFin(goal, diasDesvio)), "d 'de' MMMM", { locale: es })
+
+  if (diasDesvio > 0) {
+    const color = diasDesvio <= 2 ? 'text-amber-600 dark:text-amber-400' : 'text-red-500 dark:text-red-400'
+    return (
+      <p className={`mt-1 text-xs ${color}`}>
+        📅 Fin estimado: {fecha} (+{diasDesvio} día(s) de atraso)
+      </p>
+    )
+  }
+
+  if (diasDesvio === 0) {
+    return <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">📅 Fin estimado: {fecha} (al día)</p>
+  }
+
+  return (
+    <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+      📅 Podrías terminar el {fecha} ({-diasDesvio} día(s) antes)
+    </p>
   )
 }

@@ -32,6 +32,8 @@ export interface AchievementContext {
   goalsAchievedCount: number
   categorizedExpenseCount: number
   periodClosedWithSurplus: boolean
+  /** La mutación actual hizo que el desvío de metas pasara de atraso (> 0) a al día/adelanto (≤ 0). */
+  goalBackOnTrack: boolean
   alreadyUnlocked: AchievementId[]
 }
 
@@ -47,8 +49,14 @@ export function evaluateAchievements(ctx: AchievementContext): AchievementId[] {
   if (!has('period_closed_surplus') && ctx.periodClosedWithSurplus) unlocked.push('period_closed_surplus')
   if (!has('streak_7') && ctx.bestStreak >= 7) unlocked.push('streak_7')
   if (!has('streak_30') && ctx.bestStreak >= 30) unlocked.push('streak_30')
+  if (!has('goal_back_on_track') && ctx.goalBackOnTrack) unlocked.push('goal_back_on_track')
 
   return unlocked
+}
+
+/** La mutación actual (gasto/ingreso) sacó a las metas del atraso: pasaron de > 0 días a ≤ 0. */
+export function goalBackOnTrack(diasDesvioAntes: number | null, diasDesvioDespues: number | null): boolean {
+  return diasDesvioAntes !== null && diasDesvioAntes > 0 && diasDesvioDespues !== null && diasDesvioDespues <= 0
 }
 
 export interface CelebrationTriggers {
@@ -86,4 +94,21 @@ export function periodClosedMessage(surplus: number): string {
   return surplus >= 0
     ? `Cerraste el período con $${surplus.toFixed(2)} de sobrante. ¡Excelente manejo!`
     : `Cerraste el período con $${Math.abs(surplus).toFixed(2)} de faltante. El próximo período es una nueva oportunidad.`
+}
+
+/** Mensaje para Home ligando el estado del día con las metas. `diasDesvio` null ⇒ sin metas ⇒ ''. */
+export function goalScheduleMessage(diasDesvio: number | null): string {
+  if (diasDesvio === null) return ''
+  if (diasDesvio > 0) return `Tus metas van ${diasDesvio} día(s) atrasadas. Un día en verde las acerca de nuevo 🎯`
+  if (diasDesvio === 0) return 'Tus metas van justo al día. ¡Sigue así! 🎯'
+  return `¡Vas ${-diasDesvio} día(s) por delante! Podrías cumplir tus metas antes 🚀`
+}
+
+/** Feedback tras registrar/editar un gasto: cómo cambió el desvío. Devuelve null si no cambió o no hay metas. */
+export function expenseGoalImpactMessage(diasDesvioAntes: number | null, diasDesvioDespues: number | null): string | null {
+  if (diasDesvioAntes === null || diasDesvioDespues === null) return null
+  const delta = diasDesvioDespues - diasDesvioAntes
+  if (delta === 0) return null
+  if (delta > 0) return `Este gasto alejó tus metas ${delta} día(s) ⏳`
+  return `¡Tus metas se acercaron ${-delta} día(s)! 🎯`
 }

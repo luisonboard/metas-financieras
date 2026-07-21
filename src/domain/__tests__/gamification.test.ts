@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { applyStreak, evaluateAchievements, levelForXp, xpForAction } from '../gamification'
+import {
+  applyStreak,
+  evaluateAchievements,
+  expenseGoalImpactMessage,
+  goalBackOnTrack,
+  goalScheduleMessage,
+  levelForXp,
+  xpForAction,
+} from '../gamification'
 
 describe('gamification domain', () => {
   it('xpForAction otorga el XP correcto por cada acción', () => {
@@ -34,8 +42,45 @@ describe('gamification domain', () => {
       goalsAchievedCount: 0,
       categorizedExpenseCount: 0,
       periodClosedWithSurplus: false,
+      goalBackOnTrack: false,
       alreadyUnlocked: ['first_expense'],
     })
     expect(unlocked).toEqual(['week_green', 'streak_7'])
+  })
+
+  it('evaluateAchievements desbloquea goal_back_on_track cuando las metas salen del atraso', () => {
+    const unlocked = evaluateAchievements({
+      expenseCount: 0,
+      bestStreak: 0,
+      goalsAchievedCount: 0,
+      categorizedExpenseCount: 0,
+      periodClosedWithSurplus: false,
+      goalBackOnTrack: true,
+      alreadyUnlocked: [],
+    })
+    expect(unlocked).toEqual(['goal_back_on_track'])
+  })
+
+  it('goalBackOnTrack detecta la transición de atraso (>0) a al día/adelanto (≤0)', () => {
+    expect(goalBackOnTrack(3, 0)).toBe(true)
+    expect(goalBackOnTrack(1, -2)).toBe(true)
+    expect(goalBackOnTrack(0, -2)).toBe(false)
+    expect(goalBackOnTrack(3, 1)).toBe(false)
+    expect(goalBackOnTrack(null, -1)).toBe(false)
+    expect(goalBackOnTrack(3, null)).toBe(false)
+  })
+
+  it('goalScheduleMessage devuelve texto según atraso/al día/adelanto, vacío si no hay metas', () => {
+    expect(goalScheduleMessage(null)).toBe('')
+    expect(goalScheduleMessage(3)).toMatch(/atrasad/i)
+    expect(goalScheduleMessage(0)).toMatch(/al día/i)
+    expect(goalScheduleMessage(-2)).toMatch(/delante/i)
+  })
+
+  it('caso 7: expenseGoalImpactMessage refleja el cambio de desvío o null si no cambió', () => {
+    expect(expenseGoalImpactMessage(1, 3)).toMatch(/alejó.*2/)
+    expect(expenseGoalImpactMessage(3, 1)).toMatch(/acercaron.*2/)
+    expect(expenseGoalImpactMessage(2, 2)).toBeNull()
+    expect(expenseGoalImpactMessage(null, null)).toBeNull()
   })
 })

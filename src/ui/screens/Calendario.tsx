@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { addDays, eachDayOfInterval, endOfWeek, format, parseISO, startOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useBudgetStore } from '../../state/useBudgetStore'
-import { calendarioDisponibleExtendido, periodosNecesariosParaCubrir, todayLocalISODate } from '../../domain/budget'
+import { calendarioDisponibleExtendido, disponible, periodosNecesariosParaCubrir, todayLocalISODate } from '../../domain/budget'
 import type { DisponibleDia } from '../../domain/budget'
+import { diasDesvioMetas, fechaEstimadaFin, metasElasticas } from '../../domain/goals'
 import type { Category, Expense, ExtraIncome, Goal } from '../../domain/types'
 
 const WEEKDAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -23,10 +24,32 @@ export default function Calendario() {
   const [selectedDate, setSelectedDate] = useState(hoy)
   const [periodosExtra, setPeriodosExtra] = useState(0)
 
+  const diasDesvio = period ? diasDesvioMetas(disponible(period, goals, extraIncomes, expenses, hoy), goals, hoy) : null
+
+  const fechaEstimadaPorFecha = useMemo(() => {
+    const map = new Map<string, Goal[]>()
+    if (diasDesvio === null || diasDesvio === 0) return map
+    for (const goal of metasElasticas(goals, hoy)) {
+      const fecha = fechaEstimadaFin(goal, diasDesvio)
+      if (fecha === goal.endDate) continue
+      const lista = map.get(fecha) ?? []
+      lista.push(goal)
+      map.set(fecha, lista)
+    }
+    return map
+  }, [goals, hoy, diasDesvio])
+
   const metaMasLejana = useMemo(() => {
-    if (!period || goals.length === 0) return period?.nextPaydayDate ?? hoy
-    return goals.reduce((max, g) => (g.endDate > max ? g.endDate : max), period.nextPaydayDate)
-  }, [goals, period, hoy])
+    if (!period) return hoy
+    let max = period.nextPaydayDate
+    for (const g of goals) {
+      if (g.endDate > max) max = g.endDate
+    }
+    for (const fecha of fechaEstimadaPorFecha.keys()) {
+      if (fecha > max) max = fecha
+    }
+    return max
+  }, [goals, period, hoy, fechaEstimadaPorFecha])
 
   // La proyección siempre cubre al menos hasta la meta activa más lejana, para que ninguna
   // quede fuera del calendario; "Cargar más período" permite seguir explorando a mano.
@@ -111,6 +134,7 @@ export default function Calendario() {
                   fecha={fecha}
                   dia={porFecha.get(fecha)}
                   goalsDelDia={goalsPorFecha.get(fecha)}
+                  finEstimadoDelDia={fechaEstimadaPorFecha.get(fecha)}
                   esHoy={fecha === hoy}
                   esSeleccionado={fecha === selectedDate}
                   onSelect={() => setSelectedDate(fecha)}
@@ -147,6 +171,7 @@ export default function Calendario() {
         )}
         <span className="flex items-center gap-1">🎯 Inicio de meta</span>
         <span className="flex items-center gap-1">🏁 Fin de meta</span>
+        {fechaEstimadaPorFecha.size > 0 && <span className="flex items-center gap-1">🚩 Fin estimado</span>}
       </div>
 
       {seleccionado && (
@@ -154,6 +179,7 @@ export default function Calendario() {
           dia={seleccionado}
           hoy={hoy}
           goalsDelDia={goalsPorFecha.get(selectedDate)}
+          metasFinEstimadoDelDia={fechaEstimadaPorFecha.get(selectedDate)}
           expensesDelDia={expenses.filter((e) => e.date === selectedDate)}
           incomesDelDia={extraIncomes.filter((e) => e.date === selectedDate)}
           categories={categories}
@@ -167,12 +193,13 @@ interface CellProps {
   fecha: string
   dia: DisponibleDia | undefined
   goalsDelDia: Goal[] | undefined
+  finEstimadoDelDia: Goal[] | undefined
   esHoy: boolean
   esSeleccionado: boolean
   onSelect: () => void
 }
 
-function CalendarCell({ fecha, dia, goalsDelDia, esHoy, esSeleccionado, onSelect }: CellProps) {
+function CalendarCell({ fecha, dia, goalsDelDia, finEstimadoDelDia, esHoy, esSeleccionado, onSelect }: CellProps) {
   const numero = format(parseISO(fecha), 'd')
 
   if (!dia) {
@@ -197,7 +224,8 @@ function CalendarCell({ fecha, dia, goalsDelDia, esHoy, esSeleccionado, onSelect
 
   const empiezaMeta = goalsDelDia?.some((g) => g.startDate === fecha)
   const terminaMeta = goalsDelDia?.some((g) => g.endDate === fecha)
-  const goalBadge = empiezaMeta ? '🎯' : terminaMeta ? '🏁' : null
+  const finEstimado = finEstimadoDelDia && finEstimadoDelDia.length > 0
+  const goalBadge = empiezaMeta ? '🎯' : terminaMeta ? '🏁' : finEstimado ? '🚩' : null
 
   return (
     <button
@@ -219,12 +247,13 @@ interface DiaDetalleProps {
   dia: DisponibleDia
   hoy: string
   goalsDelDia: Goal[] | undefined
+  metasFinEstimadoDelDia: Goal[] | undefined
   expensesDelDia: Expense[]
   incomesDelDia: ExtraIncome[]
   categories: Category[]
 }
 
-function DiaDetalle({ dia, hoy, goalsDelDia, expensesDelDia, incomesDelDia, categories }: DiaDetalleProps) {
+function DiaDetalle({ dia, hoy, goalsDelDia, metasFinEstimadoDelDia, expensesDelDia, incomesDelDia, categories }: DiaDetalleProps) {
   const etiqueta =
     dia.periodoIndex > 0
       ? `Período siguiente${dia.periodoIndex > 1 ? ` #${dia.periodoIndex}` : ''} (estimado)`
@@ -259,21 +288,32 @@ function DiaDetalle({ dia, hoy, goalsDelDia, expensesDelDia, incomesDelDia, cate
         </div>
       </div>
 
-      {goalsDelDia && goalsDelDia.length > 0 && (
-        <div className="mt-4 flex flex-col gap-1 border-t border-neutral-100 pt-3 dark:border-neutral-800">
-          <p className="text-xs text-neutral-500 uppercase dark:text-neutral-400">Metas este día</p>
-          {goalsDelDia.map((goal) => {
-            const esInicio = goal.startDate === dia.date
-            const esFin = goal.endDate === dia.date
-            const nota = esInicio && esFin ? 'inicio y fin' : esInicio ? 'inicio' : esFin ? 'fin' : 'activa'
-            return (
-              <p key={goal.id} className="text-sm text-neutral-700 dark:text-neutral-300">
-                {goal.name} <span className="text-xs text-neutral-400 dark:text-neutral-500">({nota})</span>
-              </p>
-            )
-          })}
-        </div>
-      )}
+      {(() => {
+        const finEstimadoIds = new Set((metasFinEstimadoDelDia ?? []).map((g) => g.id))
+        const soloFinEstimado = (metasFinEstimadoDelDia ?? []).filter((g) => !goalsDelDia?.some((gd) => gd.id === g.id))
+        const todasLasMetas = [...(goalsDelDia ?? []), ...soloFinEstimado]
+        if (todasLasMetas.length === 0) return null
+        return (
+          <div className="mt-4 flex flex-col gap-1 border-t border-neutral-100 pt-3 dark:border-neutral-800">
+            <p className="text-xs text-neutral-500 uppercase dark:text-neutral-400">Metas este día</p>
+            {todasLasMetas.map((goal) => {
+              const esInicio = goal.startDate === dia.date
+              const esFin = goal.endDate === dia.date
+              const esFinEstimado = finEstimadoIds.has(goal.id)
+              const notas = [
+                esInicio && esFin ? 'inicio y fin' : esInicio ? 'inicio' : esFin ? 'fin' : null,
+                esFinEstimado ? 'fin estimado' : null,
+              ].filter((n): n is string => n !== null)
+              const nota = notas.length > 0 ? notas.join(', ') : 'activa'
+              return (
+                <p key={goal.id} className="text-sm text-neutral-700 dark:text-neutral-300">
+                  {goal.name} <span className="text-xs text-neutral-400 dark:text-neutral-500">({nota})</span>
+                </p>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {(expensesDelDia.length > 0 || incomesDelDia.length > 0) && (
         <div className="mt-4 border-t border-neutral-100 pt-3 dark:border-neutral-800">
