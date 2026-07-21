@@ -18,7 +18,6 @@ export default function Home({ onNavigate }: Props) {
   const categories = useBudgetStore((s) => s.categories)
   const hoy = todayLocalISODate()
 
-  const activeGoals = useMemo(() => goals.filter((g) => g.status === 'active'), [goals])
   const expensesHoy = useMemo(() => expenses.filter((e) => e.date === hoy), [expenses, hoy])
   const incomesHoy = useMemo(() => extraIncomes.filter((e) => e.date === hoy), [extraIncomes, hoy])
   const goalsHoy = useMemo(() => goals.filter((g) => g.startDate <= hoy && hoy <= g.endDate), [goals, hoy])
@@ -72,16 +71,8 @@ export default function Home({ onNavigate }: Props) {
         incomes={incomesHoy}
         goals={goalsHoy}
         categories={categories}
+        onGoalClick={() => onNavigate('metas')}
       />
-
-      {activeGoals.length > 0 && (
-        <button
-          onClick={() => onNavigate('metas')}
-          className="rounded-2xl border border-dashed border-neutral-300 p-4 text-left text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
-        >
-          Tienes {activeGoals.length} meta(s) activa(s) descontando de tu PD. Ver detalle →
-        </button>
-      )}
 
       <button
         onClick={() => onNavigate('calendario')}
