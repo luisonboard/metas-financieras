@@ -9,6 +9,7 @@ import Onboarding from './ui/screens/Onboarding'
 import Home from './ui/screens/Home'
 import BottomNav from './ui/components/BottomNav'
 import ToastStack from './ui/gamification/ToastStack'
+import type { GastosTab } from './ui/screens/Gastos'
 
 const Gastos = lazy(() => import('./ui/screens/Gastos'))
 const Calendario = lazy(() => import('./ui/screens/Calendario'))
@@ -33,6 +34,12 @@ function App() {
   const initAuth = useAuthStore((s) => s.init)
   const [screen, setScreen] = useState<Screen>('home')
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null)
+  const [pendingGastosTab, setPendingGastosTab] = useState<GastosTab | null>(null)
+
+  function handleHomeNavigate(next: Screen, gastosTab?: GastosTab) {
+    if (next === 'gastos') setPendingGastosTab(gastosTab ?? 'gastos')
+    setScreen(next)
+  }
 
   useEffect(() => {
     hydrateBudget()
@@ -110,9 +117,9 @@ function App() {
   return (
     <div className="min-h-svh bg-neutral-50 dark:bg-neutral-950">
       <main className="pb-20">
-        {screen === 'home' && <Home onNavigate={setScreen} />}
+        {screen === 'home' && <Home onNavigate={handleHomeNavigate} />}
         <Suspense fallback={<ScreenFallback />}>
-          {screen === 'gastos' && <Gastos />}
+          {screen === 'gastos' && <Gastos initialTab={pendingGastosTab ?? undefined} />}
           {screen === 'calendario' && <Calendario />}
           {screen === 'metas' && <Metas initialJoinCode={pendingJoinCode} />}
           {screen === 'perfil' && <Perfil />}

@@ -5,10 +5,11 @@ import { disponible, pdEfectivo, pdSugerido, todayLocalISODate } from '../../dom
 import { diasDesvioMetas } from '../../domain/goals'
 import { goalScheduleMessage, homeGreetingMessage } from '../../domain/gamification'
 import type { Screen } from '../../App'
+import type { GastosTab } from './Gastos'
 import DiaResumen from '../components/DiaResumen'
 
 interface Props {
-  onNavigate: (screen: Screen) => void
+  onNavigate: (screen: Screen, gastosTab?: GastosTab) => void
 }
 
 export default function Home({ onNavigate }: Props) {
@@ -86,12 +87,20 @@ export default function Home({ onNavigate }: Props) {
         📅 Ver calendario de Disponible y proyección →
       </button>
 
-      <button
-        onClick={() => onNavigate('gastos')}
-        className="rounded-2xl bg-neutral-900 py-4 text-lg font-semibold text-white shadow-lg dark:bg-white dark:text-neutral-900"
-      >
-        + Registrar gasto
-      </button>
+      <div className="flex gap-3">
+        <button
+          onClick={() => onNavigate('gastos', 'gastos')}
+          className="flex-1 rounded-2xl bg-neutral-900 py-4 text-lg font-semibold text-white shadow-lg dark:bg-white dark:text-neutral-900"
+        >
+          + Gasto
+        </button>
+        <button
+          onClick={() => onNavigate('gastos', 'ingresos')}
+          className="flex-1 rounded-2xl bg-emerald-500 py-4 text-lg font-semibold text-white shadow-lg"
+        >
+          + Ingreso
+        </button>
+      </div>
     </div>
   )
 }
