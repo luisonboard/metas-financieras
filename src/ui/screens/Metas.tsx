@@ -372,7 +372,7 @@ function GoalCard({ goal }: { goal: Goal }) {
       )}
 
       {goal.status === 'active' && (
-        <form onSubmit={handleContribute} className="mt-3 flex gap-2">
+        <form onSubmit={handleContribute} className="mt-3 flex flex-wrap gap-2">
           <input
             type="number"
             inputMode="decimal"
@@ -381,18 +381,18 @@ function GoalCard({ goal }: { goal: Goal }) {
             placeholder="Aportar $"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="flex-1 rounded-xl border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
+            className="min-w-0 flex-1 rounded-xl border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
           />
           <button
             type="submit"
-            className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
+            className="shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
           >
             Aportar
           </button>
           <button
             type="button"
             onClick={() => updateGoalStatus(goal.id, 'abandoned')}
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
+            className="shrink-0 rounded-xl border border-neutral-300 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
           >
             Abandonar
           </button>
