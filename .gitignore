@@ -37,3 +37,6 @@ dev-dist
 *.njsproj
 *.sln
 *.sw?
+
+# Plan de trabajo local, no se versiona
+PLAN.md

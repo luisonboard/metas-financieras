@@ -4,6 +4,7 @@ import { useBudgetStore } from '../../state/useBudgetStore'
 import { disponible, pdEfectivo, pdSugerido, todayLocalISODate } from '../../domain/budget'
 import { homeGreetingMessage } from '../../domain/gamification'
 import type { Screen } from '../../App'
+import DiaResumen from '../components/DiaResumen'
 
 interface Props {
   onNavigate: (screen: Screen) => void
@@ -14,9 +15,13 @@ export default function Home({ onNavigate }: Props) {
   const goals = useBudgetStore((s) => s.goals)
   const extraIncomes = useBudgetStore((s) => s.extraIncomes)
   const expenses = useBudgetStore((s) => s.expenses)
+  const categories = useBudgetStore((s) => s.categories)
   const hoy = todayLocalISODate()
 
   const activeGoals = useMemo(() => goals.filter((g) => g.status === 'active'), [goals])
+  const expensesHoy = useMemo(() => expenses.filter((e) => e.date === hoy), [expenses, hoy])
+  const incomesHoy = useMemo(() => extraIncomes.filter((e) => e.date === hoy), [extraIncomes, hoy])
+  const goalsHoy = useMemo(() => goals.filter((g) => g.startDate <= hoy && hoy <= g.endDate), [goals, hoy])
 
   if (!period) return null
 
@@ -60,6 +65,14 @@ export default function Home({ onNavigate }: Props) {
           <p className="mt-1 text-xl font-semibold text-neutral-900 dark:text-neutral-50">${sugerido.toFixed(2)}</p>
         </div>
       </div>
+
+      <DiaResumen
+        title="Hoy"
+        expenses={expensesHoy}
+        incomes={incomesHoy}
+        goals={goalsHoy}
+        categories={categories}
+      />
 
       {activeGoals.length > 0 && (
         <button

@@ -4,7 +4,7 @@ import { es } from 'date-fns/locale'
 import { useBudgetStore } from '../../state/useBudgetStore'
 import { calendarioDisponibleExtendido, periodosNecesariosParaCubrir, todayLocalISODate } from '../../domain/budget'
 import type { DisponibleDia } from '../../domain/budget'
-import type { Goal } from '../../domain/types'
+import type { Category, Expense, ExtraIncome, Goal } from '../../domain/types'
 
 const WEEKDAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -17,6 +17,7 @@ export default function Calendario() {
   const goals = useBudgetStore((s) => s.goals)
   const extraIncomes = useBudgetStore((s) => s.extraIncomes)
   const expenses = useBudgetStore((s) => s.expenses)
+  const categories = useBudgetStore((s) => s.categories)
   const hoy = todayLocalISODate()
 
   const [selectedDate, setSelectedDate] = useState(hoy)
@@ -148,7 +149,16 @@ export default function Calendario() {
         <span className="flex items-center gap-1">🏁 Fin de meta</span>
       </div>
 
-      {seleccionado && <DiaDetalle dia={seleccionado} hoy={hoy} goalsDelDia={goalsPorFecha.get(selectedDate)} />}
+      {seleccionado && (
+        <DiaDetalle
+          dia={seleccionado}
+          hoy={hoy}
+          goalsDelDia={goalsPorFecha.get(selectedDate)}
+          expensesDelDia={expenses.filter((e) => e.date === selectedDate)}
+          incomesDelDia={extraIncomes.filter((e) => e.date === selectedDate)}
+          categories={categories}
+        />
+      )}
     </div>
   )
 }
@@ -205,7 +215,16 @@ function CalendarCell({ fecha, dia, goalsDelDia, esHoy, esSeleccionado, onSelect
   )
 }
 
-function DiaDetalle({ dia, hoy, goalsDelDia }: { dia: DisponibleDia; hoy: string; goalsDelDia: Goal[] | undefined }) {
+interface DiaDetalleProps {
+  dia: DisponibleDia
+  hoy: string
+  goalsDelDia: Goal[] | undefined
+  expensesDelDia: Expense[]
+  incomesDelDia: ExtraIncome[]
+  categories: Category[]
+}
+
+function DiaDetalle({ dia, hoy, goalsDelDia, expensesDelDia, incomesDelDia, categories }: DiaDetalleProps) {
   const etiqueta =
     dia.periodoIndex > 0
       ? `Período siguiente${dia.periodoIndex > 1 ? ` #${dia.periodoIndex}` : ''} (estimado)`
@@ -253,6 +272,32 @@ function DiaDetalle({ dia, hoy, goalsDelDia }: { dia: DisponibleDia; hoy: string
               </p>
             )
           })}
+        </div>
+      )}
+
+      {(expensesDelDia.length > 0 || incomesDelDia.length > 0) && (
+        <div className="mt-4 border-t border-neutral-100 pt-3 dark:border-neutral-800">
+          <p className="text-xs text-neutral-500 uppercase dark:text-neutral-400">Gastos e ingresos este día</p>
+          <div className="mt-2 flex flex-col gap-1">
+            {expensesDelDia.map((expense) => {
+              const category = categories.find((c) => c.id === expense.categoryId)
+              return (
+                <div key={expense.id} className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-700 dark:text-neutral-300">
+                    {category ? `${category.icon} ${category.name}` : '💸 Sin categoría'}
+                    {expense.note ? ` · ${expense.note}` : ''}
+                  </span>
+                  <span className="font-medium text-red-600 dark:text-red-400">-${expense.amount.toFixed(2)}</span>
+                </div>
+              )
+            })}
+            {incomesDelDia.map((income) => (
+              <div key={income.id} className="flex items-center justify-between text-sm">
+                <span className="text-neutral-700 dark:text-neutral-300">{income.description || 'Ingreso extra'}</span>
+                <span className="font-medium text-emerald-600 dark:text-emerald-400">+${income.amount.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
