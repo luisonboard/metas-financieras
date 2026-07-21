@@ -283,3 +283,81 @@ export async function runFullSync(userId: string): Promise<void> {
   await pushOutbox()
   await pullAll()
 }
+
+// ---- Metas conjuntas: unirse por código/enlace de invitación (Fase 6) ----
+
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+
+/** Acepta un UUID pelado o un enlace tipo `https://app/?join=<uuid>`. */
+function extractGoalId(rawCode: string): string | null {
+  const trimmed = rawCode.trim()
+  try {
+    const url = new URL(trimmed)
+    const fromQuery = url.searchParams.get('join')
+    if (fromQuery && UUID_RE.test(fromQuery)) return fromQuery.match(UUID_RE)?.[0] ?? null
+  } catch {
+    // no es una URL, seguir intentando extraer un UUID directo
+  }
+  return trimmed.match(UUID_RE)?.[0] ?? null
+}
+
+async function pullGoalRelations(goalId: string): Promise<void> {
+  if (!supabase) return
+  const [members, contributions] = await Promise.all([
+    supabase.from('goal_members').select('*').eq('goal_id', goalId),
+    supabase.from('goal_contributions').select('*').eq('goal_id', goalId),
+  ])
+  if (members.data) {
+    for (const row of members.data as GoalMemberRow[]) await db.goalMembers.put(goalMemberFromRow(row))
+  }
+  if (contributions.data) {
+    for (const row of contributions.data as GoalContributionRow[]) {
+      await db.goalContributions.put(goalContributionFromRow(row))
+    }
+  }
+}
+
+export type JoinGoalResult = { ok: true; goalName: string } | { ok: false; error: string }
+
+/**
+ * Une al usuario a una meta compartida a partir de su código/enlace de invitación (el UUID de
+ * la meta). Primero intenta leer la meta directamente: si ya es dueño o miembro, RLS deja verla
+ * sin más pasos. Si no, inserta su propia fila en goal_members (autorizada por user_id =
+ * auth.uid()) y recién entonces puede leer la meta para confirmar que es compartida.
+ */
+export async function joinSharedGoal(rawCode: string, userId: string): Promise<JoinGoalResult> {
+  if (!supabase) return { ok: false, error: 'Necesitas conexión para unirte a una meta compartida.' }
+  const goalId = extractGoalId(rawCode)
+  if (!goalId) return { ok: false, error: 'Código de invitación inválido.' }
+
+  const alreadyVisible = await supabase.from('goals').select('*').eq('id', goalId).maybeSingle()
+  if (alreadyVisible.data) {
+    const row = alreadyVisible.data as GoalRow
+    await db.goals.put(goalFromRow(row))
+    await pullGoalRelations(goalId)
+    return { ok: true, goalName: row.name }
+  }
+
+  const timestamp = nowIso()
+  const { error: memberError } = await supabase.from('goal_members').upsert(
+    { id: newId(), goal_id: goalId, user_id: userId, role: 'member', created_at: timestamp, updated_at: timestamp, deleted_at: null },
+    { onConflict: 'goal_id,user_id' },
+  )
+  if (memberError) {
+    return memberError.code === '23503'
+      ? { ok: false, error: 'No existe ninguna meta con ese código.' }
+      : { ok: false, error: 'No se pudo unir a la meta. Intenta de nuevo.' }
+  }
+
+  const { data: goalData } = await supabase.from('goals').select('*').eq('id', goalId).maybeSingle()
+  if (!goalData) return { ok: false, error: 'No se pudo cargar la meta.' }
+  const goalRow = goalData as GoalRow
+  if (!goalRow.is_shared) {
+    await supabase.from('goal_members').delete().eq('goal_id', goalId).eq('user_id', userId)
+    return { ok: false, error: 'Esa meta no es compartida.' }
+  }
+
+  await db.goals.put(goalFromRow(goalRow))
+  await pullGoalRelations(goalId)
+  return { ok: true, goalName: goalRow.name }
+}

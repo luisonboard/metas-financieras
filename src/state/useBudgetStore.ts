@@ -8,8 +8,9 @@ import { goalMembersRepo } from '../db/repos/goalMembersRepo'
 import { goalsRepo } from '../db/repos/goalsRepo'
 import { periodsRepo } from '../db/repos/periodsRepo'
 import { getCurrentUserId } from '../sync/session'
+import { joinSharedGoal, type JoinGoalResult } from '../sync/sync'
 import { trackMutation } from '../sync/track'
-import type { Category, Expense, ExtraIncome, Goal, GoalContribution, ISODate, Period } from '../domain/types'
+import type { Category, Expense, ExtraIncome, Goal, GoalContribution, GoalMember, ISODate, Period } from '../domain/types'
 
 interface NewExpenseInput {
   amount: number
@@ -44,10 +45,12 @@ interface BudgetState {
   expenses: Expense[]
   extraIncomes: ExtraIncome[]
   goals: Goal[]
+  goalMembers: GoalMember[]
   goalContributions: GoalContribution[]
   isLoading: boolean
 
   hydrate: () => Promise<void>
+  refreshGoalsData: () => Promise<void>
   startPeriod: (initialMoney: number, nextPaydayDate: ISODate, nextSalaryAmount: number) => Promise<void>
   closePeriod: (nextInitialMoney: number, nextPaydayDate: ISODate, nextSalaryAmount: number) => Promise<void>
 
@@ -66,6 +69,7 @@ interface BudgetState {
   updateGoalStatus: (id: string, status: Goal['status']) => Promise<void>
   deleteGoal: (id: string) => Promise<void>
   addGoalContribution: (goalId: string, amount: number, date: ISODate) => Promise<void>
+  joinGoal: (code: string) => Promise<JoinGoalResult>
 }
 
 async function loadPeriodData(periodId: string) {
@@ -87,23 +91,40 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
   expenses: [],
   extraIncomes: [],
   goals: [],
+  goalMembers: [],
   goalContributions: [],
   isLoading: true,
 
   hydrate: async () => {
     set({ isLoading: true })
-    const [period, categories, goals] = await Promise.all([
+    const [period, categories, goals, goalMembers] = await Promise.all([
       periodsRepo.getActive(),
       categoriesRepo.listAll(),
       goalsRepo.listAll(),
+      goalMembersRepo.listAll(),
     ])
     const goalContributions = await loadGoalContributions(goals)
     if (period) {
       const { expenses, extraIncomes } = await loadPeriodData(period.id)
-      set({ period, categories, goals, goalContributions, expenses, extraIncomes, isLoading: false })
+      set({ period, categories, goals, goalMembers, goalContributions, expenses, extraIncomes, isLoading: false })
     } else {
-      set({ period: null, categories, goals, goalContributions, expenses: [], extraIncomes: [], isLoading: false })
+      set({
+        period: null,
+        categories,
+        goals,
+        goalMembers,
+        goalContributions,
+        expenses: [],
+        extraIncomes: [],
+        isLoading: false,
+      })
     }
+  },
+
+  refreshGoalsData: async () => {
+    const [goals, goalMembers] = await Promise.all([goalsRepo.listAll(), goalMembersRepo.listAll()])
+    const goalContributions = await loadGoalContributions(goals)
+    set({ goals, goalMembers, goalContributions })
   },
 
   startPeriod: async (initialMoney, nextPaydayDate, nextSalaryAmount) => {
@@ -193,7 +214,7 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
       const membership = await goalMembersRepo.create({ goalId: goal.id, userId: ownerId, role: 'owner' })
       await trackMutation('goalMember', membership.id)
     }
-    set({ goals: await goalsRepo.listAll() })
+    await get().refreshGoalsData()
   },
 
   updateGoalStatus: async (id, status) => {
@@ -212,5 +233,13 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
     const contribution = await goalContributionsRepo.create({ goalId, userId: getCurrentUserId(), amount, date })
     await trackMutation('goalContribution', contribution.id)
     set({ goalContributions: await loadGoalContributions(get().goals) })
+  },
+
+  joinGoal: async (code) => {
+    const userId = getCurrentUserId()
+    if (!userId) return { ok: false, error: 'Inicia sesión para unirte a una meta compartida.' }
+    const result = await joinSharedGoal(code, userId)
+    if (result.ok) await get().refreshGoalsData()
+    return result
   },
 }))

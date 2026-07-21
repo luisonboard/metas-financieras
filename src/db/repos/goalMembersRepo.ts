@@ -13,4 +13,8 @@ export const goalMembersRepo = {
   async listByGoal(goalId: string): Promise<GoalMember[]> {
     return db.goalMembers.filter((m) => m.deletedAt === null && m.goalId === goalId).toArray()
   },
+
+  async listAll(): Promise<GoalMember[]> {
+    return db.goalMembers.filter((m) => m.deletedAt === null).toArray()
+  },
 }

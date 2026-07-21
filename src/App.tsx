@@ -13,6 +13,7 @@ import Metas from './ui/screens/Metas'
 import Perfil from './ui/screens/Perfil'
 import CierrePeriodo from './ui/screens/CierrePeriodo'
 import BottomNav from './ui/components/BottomNav'
+import ToastStack from './ui/gamification/ToastStack'
 
 export type Screen = 'home' | 'gastos' | 'calendario' | 'metas' | 'perfil'
 
@@ -30,12 +31,24 @@ function App() {
   const checkDailyStreak = useGamificationStore((s) => s.checkDailyStreak)
   const initAuth = useAuthStore((s) => s.init)
   const [screen, setScreen] = useState<Screen>('home')
+  const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null)
 
   useEffect(() => {
     hydrateBudget()
     hydrateGamification()
     initAuth()
   }, [hydrateBudget, hydrateGamification, initAuth])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('join')
+    if (!code) return
+    setPendingJoinCode(code)
+    setScreen('metas')
+    const url = new URL(window.location.href)
+    url.searchParams.delete('join')
+    window.history.replaceState({}, '', url)
+  }, [])
 
   useEffect(() => {
     const flush = () => {
@@ -63,14 +76,29 @@ function App() {
     return (
       <div className="flex min-h-svh items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <p className="text-neutral-500 dark:text-neutral-400">Cargando…</p>
+        <ToastStack />
       </div>
     )
   }
 
-  if (!period) return <Onboarding />
+  if (!period) {
+    return (
+      <>
+        <Onboarding />
+        <ToastStack />
+      </>
+    )
+  }
 
   const needsClosing = todayLocalISODate() >= period.nextPaydayDate
-  if (needsClosing) return <CierrePeriodo period={period} />
+  if (needsClosing) {
+    return (
+      <>
+        <CierrePeriodo period={period} />
+        <ToastStack />
+      </>
+    )
+  }
 
   return (
     <div className="min-h-svh bg-neutral-50 dark:bg-neutral-950">
@@ -78,10 +106,11 @@ function App() {
         {screen === 'home' && <Home onNavigate={setScreen} />}
         {screen === 'gastos' && <Gastos />}
         {screen === 'calendario' && <Calendario />}
-        {screen === 'metas' && <Metas />}
+        {screen === 'metas' && <Metas initialJoinCode={pendingJoinCode} />}
         {screen === 'perfil' && <Perfil />}
       </main>
       <BottomNav current={screen} onChange={setScreen} />
+      <ToastStack />
     </div>
   )
 }

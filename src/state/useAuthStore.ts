@@ -3,6 +3,7 @@ import type { User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../sync/supabaseClient'
 import { setCurrentUserId } from '../sync/session'
 import { runFullSync } from '../sync/sync'
+import { startRealtimeSync, stopRealtimeSync } from '../sync/realtime'
 import { useBudgetStore } from './useBudgetStore'
 import { useGamificationStore } from './useGamificationStore'
 
@@ -58,7 +59,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     const user = data.session?.user ?? null
     setCurrentUserId(user?.id ?? null)
     set({ user, isLoading: false })
-    if (user) syncInBackground(user.id, set)
+    if (user) {
+      syncInBackground(user.id, set)
+      startRealtimeSync(user.id)
+    }
 
     supabase.auth.onAuthStateChange((event, session) => {
       const nextUser = session?.user ?? null
@@ -67,9 +71,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       if (event === 'SIGNED_IN' && nextUser) {
         syncInBackground(nextUser.id, set)
+        startRealtimeSync(nextUser.id)
       }
       if (event === 'SIGNED_OUT') {
         setCurrentUserId(null)
+        stopRealtimeSync()
         reloadLocalStores()
       }
     })

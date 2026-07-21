@@ -1,24 +1,35 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
+import { useAuthStore } from '../../state/useAuthStore'
 import { useBudgetStore } from '../../state/useBudgetStore'
 import { useGamificationStore } from '../../state/useGamificationStore'
+import { useProfilesStore } from '../../state/useProfilesStore'
 import { cuotaMeta, todayLocalISODate } from '../../domain/budget'
-import { goalProgress, reachedMilestones, type Milestone } from '../../domain/goals'
+import { cuotaMetaPorMiembro, goalProgress, reachedMilestones, type Milestone } from '../../domain/goals'
 import { celebrate } from '../gamification/confetti'
 import type { Goal } from '../../domain/types'
 
 const MILESTONE_MARKERS: Milestone[] = [25, 50, 75, 100]
 
-export default function Metas() {
+interface Props {
+  initialJoinCode?: string | null
+}
+
+export default function Metas({ initialJoinCode }: Props) {
   const goals = useBudgetStore((s) => s.goals)
   const addGoal = useBudgetStore((s) => s.addGoal)
+  const isSupabaseConfigured = useAuthStore((s) => s.isSupabaseConfigured)
+  const user = useAuthStore((s) => s.user)
 
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [targetAmount, setTargetAmount] = useState('')
   const [startDate, setStartDate] = useState(todayLocalISODate())
   const [endDate, setEndDate] = useState('')
+  const [isShared, setIsShared] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [showJoinForm, setShowJoinForm] = useState(Boolean(initialJoinCode))
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -31,11 +42,16 @@ export default function Metas() {
       setError('La fecha de fin debe ser posterior o igual a la de inicio.')
       return
     }
+    if (isShared && !user) {
+      setError('Inicia sesión para crear una meta compartida.')
+      return
+    }
     setError(null)
-    await addGoal({ name: name.trim(), targetAmount: amount, startDate, endDate, isShared: false })
+    await addGoal({ name: name.trim(), targetAmount: amount, startDate, endDate, isShared })
     setName('')
     setTargetAmount('')
     setEndDate('')
+    setIsShared(false)
     setShowForm(false)
   }
 
@@ -98,6 +114,17 @@ export default function Metas() {
               />
             </div>
           </div>
+          {isSupabaseConfigured && (
+            <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+              <input
+                type="checkbox"
+                checked={isShared}
+                onChange={(e) => setIsShared(e.target.checked)}
+                className="h-4 w-4 rounded border-neutral-300 dark:border-neutral-700"
+              />
+              Meta compartida (podrás invitar a otras personas)
+            </label>
+          )}
           {canPreviewCuota && (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               Cuota diaria estimada: ${cuotaMeta({ targetAmount: Number(targetAmount), startDate, endDate }).toFixed(2)}
@@ -108,6 +135,19 @@ export default function Metas() {
             Crear meta
           </button>
         </form>
+      )}
+
+      {isSupabaseConfigured && (
+        <div className="rounded-2xl bg-white p-4 shadow-sm dark:bg-neutral-900">
+          <button
+            type="button"
+            onClick={() => setShowJoinForm((v) => !v)}
+            className="w-full text-left text-sm font-semibold text-neutral-900 dark:text-neutral-50"
+          >
+            {showJoinForm ? '▾' : '▸'} Unirse a una meta compartida
+          </button>
+          {showJoinForm && <JoinGoalForm initialCode={initialJoinCode ?? ''} isLoggedIn={Boolean(user)} />}
+        </div>
       )}
 
       {active.length === 0 && finished.length === 0 && (
@@ -128,12 +168,72 @@ export default function Metas() {
   )
 }
 
+function JoinGoalForm({ initialCode, isLoggedIn }: { initialCode: string; isLoggedIn: boolean }) {
+  const joinGoal = useBudgetStore((s) => s.joinGoal)
+  const [code, setCode] = useState(initialCode)
+  const [status, setStatus] = useState<{ type: 'ok' | 'error'; message: string } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!code.trim()) return
+    setSubmitting(true)
+    setStatus(null)
+    const result = await joinGoal(code.trim())
+    setStatus(
+      result.ok ? { type: 'ok', message: `¡Te uniste a "${result.goalName}"!` } : { type: 'error', message: result.error },
+    )
+    if (result.ok) setCode('')
+    setSubmitting(false)
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+        Inicia sesión en tu perfil para unirte a una meta compartida.
+      </p>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-2">
+      <input
+        type="text"
+        placeholder="Pega el código o enlace de invitación"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
+      />
+      {status && (
+        <p className={`text-sm ${status.type === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+          {status.message}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={submitting}
+        className="rounded-xl bg-neutral-900 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+      >
+        Unirme
+      </button>
+    </form>
+  )
+}
+
 function GoalCard({ goal }: { goal: Goal }) {
   const allContributions = useBudgetStore((s) => s.goalContributions)
   const contributions = useMemo(
     () => allContributions.filter((c) => c.goalId === goal.id),
     [allContributions, goal.id],
   )
+  const allGoalMembers = useBudgetStore((s) => s.goalMembers)
+  const members = useMemo(() => allGoalMembers.filter((m) => m.goalId === goal.id), [allGoalMembers, goal.id])
+  const fetchProfiles = useProfilesStore((s) => s.fetchProfiles)
+  // Se suscribe a byId (no solo a labelFor, cuya referencia de función nunca cambia) para
+  // que el componente vuelva a renderizar cuando lleguen los perfiles.
+  useProfilesStore((s) => s.byId)
+  const labelFor = useProfilesStore((s) => s.labelFor)
+
   const addGoalContribution = useBudgetStore((s) => s.addGoalContribution)
   const updateGoalStatus = useBudgetStore((s) => s.updateGoalStatus)
   const expenses = useBudgetStore((s) => s.expenses)
@@ -142,10 +242,16 @@ function GoalCard({ goal }: { goal: Goal }) {
   const unlockAchievements = useGamificationStore((s) => s.unlockAchievements)
 
   const [amount, setAmount] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (goal.isShared && members.length > 0) fetchProfiles(members.map((m) => m.userId))
+  }, [goal.isShared, members, fetchProfiles])
 
   const progress = goalProgress(goal, contributions)
   const milestones = reachedMilestones(progress)
   const daily = cuotaMeta(goal)
+  const dailyPerMember = cuotaMetaPorMiembro(goal, members.length)
 
   async function handleContribute(event: FormEvent) {
     event.preventDefault()
@@ -171,11 +277,22 @@ function GoalCard({ goal }: { goal: Goal }) {
     }
   }
 
+  async function handleCopyInvite() {
+    const url = new URL(window.location.href)
+    url.search = ''
+    url.searchParams.set('join', goal.id)
+    await navigator.clipboard.writeText(url.toString())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <motion.div layout className="rounded-2xl bg-white p-4 shadow-sm dark:bg-neutral-900">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-semibold text-neutral-900 dark:text-neutral-50">{goal.name}</p>
+          <p className="font-semibold text-neutral-900 dark:text-neutral-50">
+            {goal.name} {goal.isShared && <span title="Meta compartida">👥</span>}
+          </p>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
             ${goal.targetAmount.toFixed(2)} objetivo · ${daily.toFixed(2)}/día
           </p>
@@ -211,6 +328,31 @@ function GoalCard({ goal }: { goal: Goal }) {
         ))}
       </div>
       <p className="mt-1 text-right text-xs text-neutral-500 dark:text-neutral-400">{progress.toFixed(0)}%</p>
+
+      {goal.isShared && (
+        <div className="mt-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-800/60">
+          <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+            {members.length} miembro(s) · sugerido ${dailyPerMember.toFixed(2)}/día c/u
+          </p>
+          {members.length > 0 && (
+            <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-600 dark:text-neutral-300">
+              {members.map((m) => (
+                <li key={m.id}>
+                  {labelFor(m.userId)}
+                  {m.role === 'owner' ? ' (dueño)' : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            type="button"
+            onClick={handleCopyInvite}
+            className="mt-2 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
+          >
+            {copied ? '¡Enlace copiado!' : 'Copiar enlace de invitación'}
+          </button>
+        </div>
+      )}
 
       {goal.status === 'active' && (
         <form onSubmit={handleContribute} className="mt-3 flex gap-2">
