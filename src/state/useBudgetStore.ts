@@ -53,6 +53,7 @@ interface BudgetState {
   refreshGoalsData: () => Promise<void>
   startPeriod: (initialMoney: number, nextPaydayDate: ISODate, nextSalaryAmount: number) => Promise<void>
   closePeriod: (nextInitialMoney: number, nextPaydayDate: ISODate, nextSalaryAmount: number) => Promise<void>
+  updateNextSalaryAmount: (amount: number) => Promise<void>
 
   addExpense: (input: NewExpenseInput) => Promise<void>
   updateExpense: (id: string, changes: Partial<NewExpenseInput>) => Promise<void>
@@ -146,6 +147,15 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
     await periodsRepo.update(current.id, { status: 'closed' })
     await trackMutation('period', current.id)
     await get().startPeriod(nextInitialMoney, nextPaydayDate, nextSalaryAmount)
+  },
+
+  updateNextSalaryAmount: async (amount) => {
+    const period = get().period
+    if (!period) return
+    await periodsRepo.update(period.id, { nextSalaryAmount: amount })
+    await trackMutation('period', period.id)
+    const updated = await periodsRepo.getById(period.id)
+    if (updated) set({ period: updated })
   },
 
   addExpense: async (input) => {
