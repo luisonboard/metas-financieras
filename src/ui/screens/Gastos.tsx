@@ -4,6 +4,7 @@ import { useGamificationStore } from '../../state/useGamificationStore'
 import { pdEfectivo, todayLocalISODate } from '../../domain/budget'
 import { expenseFeedbackMessage } from '../../domain/gamification'
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../components/categoryPresets'
+import type { Category, Expense } from '../../domain/types'
 
 type Tab = 'gastos' | 'ingresos' | 'categorias'
 
@@ -48,6 +49,7 @@ function ExpensesTab() {
   const categories = useBudgetStore((s) => s.categories)
   const goals = useBudgetStore((s) => s.goals)
   const addExpense = useBudgetStore((s) => s.addExpense)
+  const updateExpense = useBudgetStore((s) => s.updateExpense)
   const deleteExpense = useBudgetStore((s) => s.deleteExpense)
   const awardXp = useGamificationStore((s) => s.awardXp)
   const unlockAchievements = useGamificationStore((s) => s.unlockAchievements)
@@ -57,6 +59,7 @@ function ExpensesTab() {
   const [categoryId, setCategoryId] = useState('')
   const [note, setNote] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -133,6 +136,20 @@ function ExpensesTab() {
 
       <ul className="flex flex-col gap-2">
         {sorted.map((expense) => {
+          if (editingId === expense.id) {
+            return (
+              <EditExpenseForm
+                key={expense.id}
+                expense={expense}
+                categories={categories}
+                onCancel={() => setEditingId(null)}
+                onSave={async (changes) => {
+                  await updateExpense(expense.id, changes)
+                  setEditingId(null)
+                }}
+              />
+            )
+          }
           const category = categories.find((c) => c.id === expense.categoryId)
           return (
             <li
@@ -150,6 +167,9 @@ function ExpensesTab() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-semibold text-neutral-900 dark:text-neutral-50">${expense.amount.toFixed(2)}</span>
+                <button onClick={() => setEditingId(expense.id)} className="text-sm text-emerald-600 dark:text-emerald-400">
+                  Editar
+                </button>
                 <button onClick={() => deleteExpense(expense.id)} className="text-sm text-red-500">
                   Eliminar
                 </button>
@@ -162,6 +182,98 @@ function ExpensesTab() {
         )}
       </ul>
     </div>
+  )
+}
+
+interface EditExpenseFormProps {
+  expense: Expense
+  categories: Category[]
+  onCancel: () => void
+  onSave: (changes: { amount: number; date: string; categoryId: string | null; note?: string }) => Promise<void>
+}
+
+function EditExpenseForm({ expense, categories, onCancel, onSave }: EditExpenseFormProps) {
+  const [amount, setAmount] = useState(expense.amount.toString())
+  const [date, setDate] = useState(expense.date)
+  const [categoryId, setCategoryId] = useState(expense.categoryId ?? '')
+  const [note, setNote] = useState(expense.note ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    const value = Number(amount)
+    if (!Number.isFinite(value) || value <= 0) {
+      setError('Ingresa un monto válido mayor a cero.')
+      return
+    }
+    setError(null)
+    setSaving(true)
+    await onSave({ amount: value, date, categoryId: categoryId || null, note: note || undefined })
+    setSaving(false)
+  }
+
+  return (
+    <li className="flex flex-col gap-3 rounded-xl bg-white p-3 shadow-sm dark:bg-neutral-900">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <div className="flex gap-3">
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-1/2 rounded-xl border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
+            required
+          />
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-1/2 rounded-xl border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
+            required
+          />
+        </div>
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          className="rounded-xl border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
+        >
+          <option value="">Sin categoría</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.icon} {c.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          placeholder="Nota (opcional)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="rounded-xl border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-50"
+        />
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 rounded-xl bg-emerald-500 py-2 font-medium text-white transition hover:bg-emerald-600 disabled:opacity-50"
+          >
+            Guardar
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            className="flex-1 rounded-xl border border-neutral-300 py-2 font-medium text-neutral-700 dark:border-neutral-700 dark:text-neutral-300"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </li>
   )
 }
 
