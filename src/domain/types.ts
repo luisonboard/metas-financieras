@@ -90,3 +90,4 @@ export type AchievementId =
   | 'period_closed_surplus'
   | 'streak_7'
   | 'streak_30'
+  | 'goal_back_on_track'

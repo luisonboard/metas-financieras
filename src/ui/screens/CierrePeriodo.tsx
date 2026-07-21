@@ -72,6 +72,7 @@ export default function CierrePeriodo({ period }: Props) {
       categorizedExpenseCount: expenses.filter((e) => e.categoryId !== null).length,
       goalsAchievedCount: goals.filter((g) => g.status === 'achieved').length,
       periodClosedWithSurplus: sobrante >= 0,
+      goalBackOnTrack: false,
     })
     if (sobrante >= 0) celebrate()
 

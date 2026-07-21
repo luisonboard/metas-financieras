@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useBudgetStore } from '../../state/useBudgetStore'
 import { disponible, pdEfectivo, pdSugerido, todayLocalISODate } from '../../domain/budget'
-import { homeGreetingMessage } from '../../domain/gamification'
+import { diasDesvioMetas } from '../../domain/goals'
+import { goalScheduleMessage, homeGreetingMessage } from '../../domain/gamification'
 import type { Screen } from '../../App'
 import DiaResumen from '../components/DiaResumen'
 
@@ -28,10 +29,14 @@ export default function Home({ onNavigate }: Props) {
   const disponibleHoy = disponible(period, goals, extraIncomes, expenses, hoy)
   const sugerido = pdSugerido(period, goals, extraIncomes, expenses, hoy)
   const isPositive = disponibleHoy >= 0
+  const mensajeMetas = goalScheduleMessage(diasDesvioMetas(disponibleHoy, goals, hoy))
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <p className="text-center text-neutral-500 dark:text-neutral-400">{homeGreetingMessage(disponibleHoy)}</p>
+      <div className="text-center">
+        <p className="text-neutral-500 dark:text-neutral-400">{homeGreetingMessage(disponibleHoy)}</p>
+        {mensajeMetas && <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{mensajeMetas}</p>}
+      </div>
 
       <motion.div
         key={Math.round(disponibleHoy * 100)}

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useBudgetStore } from '../../state/useBudgetStore'
 import { useGamificationStore } from '../../state/useGamificationStore'
-import { pdEfectivo, todayLocalISODate } from '../../domain/budget'
-import { expenseFeedbackMessage } from '../../domain/gamification'
+import { disponible, pdEfectivo, todayLocalISODate } from '../../domain/budget'
+import { diasDesvioMetas } from '../../domain/goals'
+import { expenseFeedbackMessage, expenseGoalImpactMessage, goalBackOnTrack } from '../../domain/gamification'
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../components/categoryPresets'
 import type { Category, Expense } from '../../domain/types'
 
@@ -61,11 +62,25 @@ function ExpensesTab() {
   const [feedback, setFeedback] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
 
+  function diasDesvioActual() {
+    if (!period) return null
+    const { expenses: expensesAhora, extraIncomes: extraIncomesAhora } = useBudgetStore.getState()
+    const hoy = todayLocalISODate()
+    return diasDesvioMetas(disponible(period, goals, extraIncomesAhora, expensesAhora, hoy), goals, hoy)
+  }
+
+  function mostrarFeedback(mensajeBase: string | null, diasDesvioAntes: number | null) {
+    const impacto = expenseGoalImpactMessage(diasDesvioAntes, diasDesvioActual())
+    setFeedback([mensajeBase, impacto].filter(Boolean).join(' '))
+    setTimeout(() => setFeedback(null), 4000)
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     const value = Number(amount)
     if (!Number.isFinite(value) || value <= 0 || !period) return
 
+    const diasDesvioAntes = diasDesvioActual()
     await addExpense({ amount: value, date, categoryId: categoryId || null, note: note || undefined })
     await awardXp('expense_logged')
 
@@ -75,13 +90,25 @@ function ExpensesTab() {
       categorizedExpenseCount: categorizedCount,
       goalsAchievedCount: goals.filter((g) => g.status === 'achieved').length,
       periodClosedWithSurplus: false,
+      goalBackOnTrack: goalBackOnTrack(diasDesvioAntes, diasDesvioActual()),
     })
 
     const pdHoy = pdEfectivo(period, goals, date)
-    setFeedback(expenseFeedbackMessage(value <= pdHoy))
+    mostrarFeedback(expenseFeedbackMessage(value <= pdHoy), diasDesvioAntes)
     setAmount('')
     setNote('')
-    setTimeout(() => setFeedback(null), 4000)
+  }
+
+  async function handleDelete(id: string) {
+    const diasDesvioAntes = diasDesvioActual()
+    await deleteExpense(id)
+    await unlockAchievements({
+      expenseCount: expenses.length - 1,
+      categorizedExpenseCount: expenses.filter((e) => e.categoryId !== null && e.id !== id).length,
+      goalsAchievedCount: goals.filter((g) => g.status === 'achieved').length,
+      periodClosedWithSurplus: false,
+      goalBackOnTrack: goalBackOnTrack(diasDesvioAntes, diasDesvioActual()),
+    })
   }
 
   const sorted = [...expenses].sort((a, b) => (a.date < b.date ? 1 : -1))
@@ -144,8 +171,17 @@ function ExpensesTab() {
                 categories={categories}
                 onCancel={() => setEditingId(null)}
                 onSave={async (changes) => {
+                  const diasDesvioAntes = diasDesvioActual()
                   await updateExpense(expense.id, changes)
                   setEditingId(null)
+                  await unlockAchievements({
+                    expenseCount: expenses.length,
+                    categorizedExpenseCount: expenses.filter((e) => e.categoryId !== null).length,
+                    goalsAchievedCount: goals.filter((g) => g.status === 'achieved').length,
+                    periodClosedWithSurplus: false,
+                    goalBackOnTrack: goalBackOnTrack(diasDesvioAntes, diasDesvioActual()),
+                  })
+                  mostrarFeedback(null, diasDesvioAntes)
                 }}
               />
             )
@@ -170,7 +206,7 @@ function ExpensesTab() {
                 <button onClick={() => setEditingId(expense.id)} className="text-sm text-emerald-600 dark:text-emerald-400">
                   Editar
                 </button>
-                <button onClick={() => deleteExpense(expense.id)} className="text-sm text-red-500">
+                <button onClick={() => handleDelete(expense.id)} className="text-sm text-red-500">
                   Eliminar
                 </button>
               </div>
