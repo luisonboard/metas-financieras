@@ -29,6 +29,22 @@ describe('repos locales (Dexie)', () => {
     expect(active?.id).toBe(period.id)
   })
 
+  it('actualiza el monto del próximo sueldo de un período existente', async () => {
+    const period = await periodsRepo.create({
+      userId: null,
+      initialMoney: 200,
+      startDate: '2026-01-01',
+      nextPaydayDate: '2026-01-11',
+      nextSalaryAmount: 300,
+      status: 'active',
+    })
+
+    await periodsRepo.update(period.id, { nextSalaryAmount: 450 })
+
+    const updated = await periodsRepo.getById(period.id)
+    expect(updated?.nextSalaryAmount).toBe(450)
+  })
+
   it('el borrado lógico excluye la categoría de listAll', async () => {
     const category = await categoriesRepo.create({ userId: null, name: 'Comida', icon: '🍔', color: '#f00' })
     let all = await categoriesRepo.listAll()
