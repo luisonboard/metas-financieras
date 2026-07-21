@@ -4,8 +4,11 @@ import { categoriesRepo } from '../db/repos/categoriesRepo'
 import { expensesRepo } from '../db/repos/expensesRepo'
 import { extraIncomesRepo } from '../db/repos/extraIncomesRepo'
 import { goalContributionsRepo } from '../db/repos/goalContributionsRepo'
+import { goalMembersRepo } from '../db/repos/goalMembersRepo'
 import { goalsRepo } from '../db/repos/goalsRepo'
 import { periodsRepo } from '../db/repos/periodsRepo'
+import { getCurrentUserId } from '../sync/session'
+import { trackMutation } from '../sync/track'
 import type { Category, Expense, ExtraIncome, Goal, GoalContribution, ISODate, Period } from '../domain/types'
 
 interface NewExpenseInput {
@@ -105,13 +108,14 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
 
   startPeriod: async (initialMoney, nextPaydayDate, nextSalaryAmount) => {
     const period = await periodsRepo.create({
-      userId: null,
+      userId: getCurrentUserId(),
       initialMoney,
       startDate: todayLocalISODate(),
       nextPaydayDate,
       nextSalaryAmount,
       status: 'active',
     })
+    await trackMutation('period', period.id)
     set({ period, expenses: [], extraIncomes: [] })
   },
 
@@ -119,13 +123,15 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
     const current = get().period
     if (!current) return
     await periodsRepo.update(current.id, { status: 'closed' })
+    await trackMutation('period', current.id)
     await get().startPeriod(nextInitialMoney, nextPaydayDate, nextSalaryAmount)
   },
 
   addExpense: async (input) => {
     const period = get().period
     if (!period) return
-    await expensesRepo.create({ userId: null, periodId: period.id, ...input })
+    const expense = await expensesRepo.create({ userId: getCurrentUserId(), periodId: period.id, ...input })
+    await trackMutation('expense', expense.id)
     set({ expenses: await expensesRepo.listByPeriod(period.id) })
   },
 
@@ -133,6 +139,7 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
     const period = get().period
     if (!period) return
     await expensesRepo.update(id, changes)
+    await trackMutation('expense', id)
     set({ expenses: await expensesRepo.listByPeriod(period.id) })
   },
 
@@ -140,13 +147,15 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
     const period = get().period
     if (!period) return
     await expensesRepo.softDelete(id)
+    await trackMutation('expense', id)
     set({ expenses: await expensesRepo.listByPeriod(period.id) })
   },
 
   addExtraIncome: async (input) => {
     const period = get().period
     if (!period) return
-    await extraIncomesRepo.create({ userId: null, periodId: period.id, ...input })
+    const income = await extraIncomesRepo.create({ userId: getCurrentUserId(), periodId: period.id, ...input })
+    await trackMutation('extraIncome', income.id)
     set({ extraIncomes: await extraIncomesRepo.listByPeriod(period.id) })
   },
 
@@ -154,41 +163,54 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
     const period = get().period
     if (!period) return
     await extraIncomesRepo.softDelete(id)
+    await trackMutation('extraIncome', id)
     set({ extraIncomes: await extraIncomesRepo.listByPeriod(period.id) })
   },
 
   addCategory: async (input) => {
-    await categoriesRepo.create({ userId: null, ...input })
+    const category = await categoriesRepo.create({ userId: getCurrentUserId(), ...input })
+    await trackMutation('category', category.id)
     set({ categories: await categoriesRepo.listAll() })
   },
 
   updateCategory: async (id, changes) => {
     await categoriesRepo.update(id, changes)
+    await trackMutation('category', id)
     set({ categories: await categoriesRepo.listAll() })
   },
 
   deleteCategory: async (id) => {
     await categoriesRepo.softDelete(id)
+    await trackMutation('category', id)
     set({ categories: await categoriesRepo.listAll() })
   },
 
   addGoal: async (input) => {
-    await goalsRepo.create({ ownerId: null, status: 'active', ...input })
+    const ownerId = getCurrentUserId()
+    const goal = await goalsRepo.create({ ownerId, status: 'active', ...input })
+    await trackMutation('goal', goal.id)
+    if (ownerId) {
+      const membership = await goalMembersRepo.create({ goalId: goal.id, userId: ownerId, role: 'owner' })
+      await trackMutation('goalMember', membership.id)
+    }
     set({ goals: await goalsRepo.listAll() })
   },
 
   updateGoalStatus: async (id, status) => {
     await goalsRepo.update(id, { status })
+    await trackMutation('goal', id)
     set({ goals: await goalsRepo.listAll() })
   },
 
   deleteGoal: async (id) => {
     await goalsRepo.softDelete(id)
+    await trackMutation('goal', id)
     set({ goals: await goalsRepo.listAll() })
   },
 
   addGoalContribution: async (goalId, amount, date) => {
-    await goalContributionsRepo.create({ goalId, userId: null, amount, date })
+    const contribution = await goalContributionsRepo.create({ goalId, userId: getCurrentUserId(), amount, date })
+    await trackMutation('goalContribution', contribution.id)
     set({ goalContributions: await loadGoalContributions(get().goals) })
   },
 }))

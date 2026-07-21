@@ -9,10 +9,19 @@ import type {
   GoalMember,
   Period,
 } from '../domain/types'
+import type { SyncEntity } from '../sync/entities'
 
 /** Fila de gamificación persistida: id local fijo cuando no hay sesión (userId null). */
 export interface GamificationRow extends GamificationState {
   id: string
+}
+
+/** Mutación local pendiente de subir a Supabase. La clave `${entity}:${rowId}` deduplica encolados repetidos. */
+export interface OutboxEntry {
+  id: string
+  entity: SyncEntity
+  rowId: string
+  enqueuedAt: string
 }
 
 export class AppDatabase extends Dexie {
@@ -24,6 +33,7 @@ export class AppDatabase extends Dexie {
   goalMembers!: EntityTable<GoalMember, 'id'>
   goalContributions!: EntityTable<GoalContribution, 'id'>
   gamificationState!: EntityTable<GamificationRow, 'id'>
+  outbox!: EntityTable<OutboxEntry, 'id'>
 
   constructor() {
     super('presupuesto-diario')
@@ -36,6 +46,9 @@ export class AppDatabase extends Dexie {
       goalMembers: 'id, goalId, userId, deletedAt',
       goalContributions: 'id, goalId, userId, date, deletedAt',
       gamificationState: 'id, userId',
+    })
+    this.version(2).stores({
+      outbox: 'id, entity, rowId',
     })
   }
 }

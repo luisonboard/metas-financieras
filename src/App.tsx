@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { addDays, format } from 'date-fns'
 import { useBudgetStore } from './state/useBudgetStore'
 import { useGamificationStore } from './state/useGamificationStore'
+import { useAuthStore } from './state/useAuthStore'
+import { pushOutbox } from './sync/sync'
 import { disponible, parseLocalDate, todayLocalISODate } from './domain/budget'
 import Onboarding from './ui/screens/Onboarding'
 import Home from './ui/screens/Home'
@@ -14,6 +16,8 @@ import BottomNav from './ui/components/BottomNav'
 
 export type Screen = 'home' | 'gastos' | 'calendario' | 'metas' | 'perfil'
 
+const OUTBOX_FLUSH_INTERVAL_MS = 5 * 60 * 1000
+
 function App() {
   const period = useBudgetStore((s) => s.period)
   const goals = useBudgetStore((s) => s.goals)
@@ -24,12 +28,26 @@ function App() {
   const gamificationState = useGamificationStore((s) => s.state)
   const hydrateGamification = useGamificationStore((s) => s.hydrate)
   const checkDailyStreak = useGamificationStore((s) => s.checkDailyStreak)
+  const initAuth = useAuthStore((s) => s.init)
   const [screen, setScreen] = useState<Screen>('home')
 
   useEffect(() => {
     hydrateBudget()
     hydrateGamification()
-  }, [hydrateBudget, hydrateGamification])
+    initAuth()
+  }, [hydrateBudget, hydrateGamification, initAuth])
+
+  useEffect(() => {
+    const flush = () => {
+      pushOutbox()
+    }
+    window.addEventListener('online', flush)
+    const interval = setInterval(flush, OUTBOX_FLUSH_INTERVAL_MS)
+    return () => {
+      window.removeEventListener('online', flush)
+      clearInterval(interval)
+    }
+  }, [])
 
   useEffect(() => {
     if (!period || !gamificationState) return

@@ -1,5 +1,6 @@
 import { useGamificationStore } from '../../state/useGamificationStore'
 import { ACHIEVEMENT_LABELS } from '../gamification/achievementLabels'
+import AccountSection from '../components/AccountSection'
 import type { AchievementId } from '../../domain/types'
 
 const ALL_ACHIEVEMENTS = Object.keys(ACHIEVEMENT_LABELS) as AchievementId[]
@@ -17,6 +18,8 @@ export default function Perfil() {
   return (
     <div className="flex flex-col gap-6 p-6">
       <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Perfil</h1>
+
+      <AccountSection />
 
       <div className="rounded-3xl bg-white p-6 text-center shadow-sm dark:bg-neutral-900">
         <p className="text-sm text-neutral-500 dark:text-neutral-400">Nivel</p>

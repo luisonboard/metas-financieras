@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { gamificationRepo } from '../db/repos/gamificationRepo'
+import { getCurrentUserId } from '../sync/session'
+import { trackMutation } from '../sync/track'
 import { applyStreak, evaluateAchievements, levelForXp, xpForAction, type AchievementContext, type XpAction } from '../domain/gamification'
 import type { AchievementId, GamificationState, ISODate } from '../domain/types'
 
@@ -19,23 +21,26 @@ export const useGamificationStore = create<GamificationStoreState>((set, get) =>
   isLoading: true,
 
   hydrate: async () => {
-    const state = await gamificationRepo.getOrCreate(null)
+    const state = await gamificationRepo.getOrCreate(getCurrentUserId())
     set({ state, isLoading: false })
   },
 
   awardXp: async (action) => {
-    const current = get().state ?? (await gamificationRepo.getOrCreate(null))
+    const userId = getCurrentUserId()
+    const current = get().state ?? (await gamificationRepo.getOrCreate(userId))
     const xp = current.xp + xpForAction(action)
     const previousLevel = current.level
     const level = levelForXp(xp)
-    await gamificationRepo.update(null, { xp, level })
+    await gamificationRepo.update(userId, { xp, level })
+    if (userId) await trackMutation('gamification', userId)
     const updated = { ...current, xp, level }
     set({ state: updated })
     return { xp, level, leveledUp: level > previousLevel }
   },
 
   unlockAchievements: async (ctx) => {
-    const current = get().state ?? (await gamificationRepo.getOrCreate(null))
+    const userId = getCurrentUserId()
+    const current = get().state ?? (await gamificationRepo.getOrCreate(userId))
     const newlyUnlocked = evaluateAchievements({
       ...ctx,
       bestStreak: current.bestStreak,
@@ -44,17 +49,20 @@ export const useGamificationStore = create<GamificationStoreState>((set, get) =>
     if (newlyUnlocked.length === 0) return []
 
     const achievements = [...current.achievements, ...newlyUnlocked]
-    await gamificationRepo.update(null, { achievements })
+    await gamificationRepo.update(userId, { achievements })
+    if (userId) await trackMutation('gamification', userId)
     set({ state: { ...current, achievements } })
     return newlyUnlocked
   },
 
   checkDailyStreak: async (checkedDate, previousDayWasGreen) => {
-    const current = get().state ?? (await gamificationRepo.getOrCreate(null))
+    const userId = getCurrentUserId()
+    const current = get().state ?? (await gamificationRepo.getOrCreate(userId))
     if (current.lastStreakCheckDate === checkedDate) return
 
     const { currentStreak, bestStreak } = applyStreak(current, previousDayWasGreen)
-    await gamificationRepo.update(null, { currentStreak, bestStreak, lastStreakCheckDate: checkedDate })
+    await gamificationRepo.update(userId, { currentStreak, bestStreak, lastStreakCheckDate: checkedDate })
+    if (userId) await trackMutation('gamification', userId)
     set({ state: { ...current, currentStreak, bestStreak, lastStreakCheckDate: checkedDate } })
   },
 }))
