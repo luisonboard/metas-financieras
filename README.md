@@ -1,32 +1,47 @@
-# React + TypeScript + Vite
+# Presupuesto Diario
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+PWA local-first de finanzas personales. Calcula un Presupuesto Diario (PD) y el Disponible en tiempo real a partir del dinero actual y la fecha del próximo sueldo. Soporta categorías, ingresos extra, metas de ahorro (individuales y conjuntas), gamificación y sincronización opcional con Supabase. Funciona 100 % offline sin cuenta.
 
-Currently, two official plugins are available:
+Ver [PLAN.md](./PLAN.md) para la especificación completa del producto (modelo de datos, reglas de negocio, fases de implementación).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+React 18 + TypeScript + Vite · Tailwind CSS · Zustand · Dexie.js (IndexedDB) · vite-plugin-pwa · Framer Motion + canvas-confetti · date-fns · Supabase (Auth, Postgres, Realtime) · Vitest.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Desarrollo local
 
-## Expanding the Oxlint configuration
+Requiere Node 20 (ver `.nvmrc`).
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+cp .env.example .env.local   # completar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Sin las variables de Supabase configuradas, la app funciona igual: sincronización y metas conjuntas quedan deshabilitadas, el resto es 100 % funcional en local.
+
+Otros scripts:
+
+```bash
+npm run test     # Vitest
+npm run lint     # Oxlint
+npm run build    # tsc -b && vite build → dist/
+npm run preview  # sirve dist/ localmente para probar el build de producción
+```
+
+## Supabase
+
+Las migraciones SQL versionadas están en `supabase/migrations/`. Aplicarlas en orden sobre el proyecto de Supabase (SQL Editor o `supabase db push`) antes de habilitar Auth/sync. Sin la migración `0006_profiles.sql` aplicada, los nombres de miembros en metas conjuntas caen al fallback "Alguien".
+
+## Despliegue en Cloudflare Pages
+
+1. En el dashboard de Cloudflare: **Workers & Pages → Create → Pages → Connect to Git** y seleccionar este repositorio de GitHub.
+2. Configuración de build:
+   - **Framework preset**: Vite
+   - **Build command**: `npm run build`
+   - **Build output directory**: `dist`
+3. Variables de entorno (Settings → Environment variables, en Production y Preview):
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. Cada push a `main` dispara un deploy a producción; cada Pull Request genera automáticamente un deploy de preview con su propia URL.
+5. El proyecto incluye `public/_headers` con cache-control ajustado para `sw.js` y el manifest, necesario para que el banner de actualización de la PWA detecte nuevas versiones correctamente.

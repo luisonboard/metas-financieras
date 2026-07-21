@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { addDays, format } from 'date-fns'
 import { useBudgetStore } from './state/useBudgetStore'
 import { useGamificationStore } from './state/useGamificationStore'
@@ -7,13 +7,14 @@ import { pushOutbox } from './sync/sync'
 import { disponible, parseLocalDate, todayLocalISODate } from './domain/budget'
 import Onboarding from './ui/screens/Onboarding'
 import Home from './ui/screens/Home'
-import Gastos from './ui/screens/Gastos'
-import Calendario from './ui/screens/Calendario'
-import Metas from './ui/screens/Metas'
-import Perfil from './ui/screens/Perfil'
-import CierrePeriodo from './ui/screens/CierrePeriodo'
 import BottomNav from './ui/components/BottomNav'
 import ToastStack from './ui/gamification/ToastStack'
+
+const Gastos = lazy(() => import('./ui/screens/Gastos'))
+const Calendario = lazy(() => import('./ui/screens/Calendario'))
+const Metas = lazy(() => import('./ui/screens/Metas'))
+const Perfil = lazy(() => import('./ui/screens/Perfil'))
+const CierrePeriodo = lazy(() => import('./ui/screens/CierrePeriodo'))
 
 export type Screen = 'home' | 'gastos' | 'calendario' | 'metas' | 'perfil'
 
@@ -74,17 +75,19 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+      <main className="flex min-h-svh items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <p className="text-neutral-500 dark:text-neutral-400">Cargando…</p>
         <ToastStack />
-      </div>
+      </main>
     )
   }
 
   if (!period) {
     return (
       <>
-        <Onboarding />
+        <main>
+          <Onboarding />
+        </main>
         <ToastStack />
       </>
     )
@@ -94,7 +97,11 @@ function App() {
   if (needsClosing) {
     return (
       <>
-        <CierrePeriodo period={period} />
+        <main>
+          <Suspense fallback={<ScreenFallback />}>
+            <CierrePeriodo period={period} />
+          </Suspense>
+        </main>
         <ToastStack />
       </>
     )
@@ -104,13 +111,23 @@ function App() {
     <div className="min-h-svh bg-neutral-50 dark:bg-neutral-950">
       <main className="pb-20">
         {screen === 'home' && <Home onNavigate={setScreen} />}
-        {screen === 'gastos' && <Gastos />}
-        {screen === 'calendario' && <Calendario />}
-        {screen === 'metas' && <Metas initialJoinCode={pendingJoinCode} />}
-        {screen === 'perfil' && <Perfil />}
+        <Suspense fallback={<ScreenFallback />}>
+          {screen === 'gastos' && <Gastos />}
+          {screen === 'calendario' && <Calendario />}
+          {screen === 'metas' && <Metas initialJoinCode={pendingJoinCode} />}
+          {screen === 'perfil' && <Perfil />}
+        </Suspense>
       </main>
       <BottomNav current={screen} onChange={setScreen} />
       <ToastStack />
+    </div>
+  )
+}
+
+function ScreenFallback() {
+  return (
+    <div className="flex min-h-40 items-center justify-center">
+      <p className="text-sm text-neutral-500 dark:text-neutral-400">Cargando…</p>
     </div>
   )
 }

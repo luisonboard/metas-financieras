@@ -179,13 +179,24 @@ Con ese período hipotético (sin expenses/extraIncomes propios todavía) se vue
 
 ## 9. Fases de implementación (ejecutar en orden)
 
-### Fase 1 — Fundación y dominio
+> **Estado actual (2026-07-21): Fases 1-6 completadas; Fase 7 en curso** (ver detalle más abajo).
+> Pendiente principal: conectar Cloudflare Pages en el dashboard (requiere login del usuario) y medir
+> Lighthouse Performance contra la URL pública ya desplegada. Notas y pendientes menores heredados:
+> - Fase 5: Supabase Auth solo tiene email+password implementado; **Google no está implementado** (el
+>   texto original de la fase lo mencionaba como parte del alcance).
+> - Fase 6: requiere que la migración `supabase/migrations/0006_profiles.sql` esté aplicada en el
+>   proyecto de Supabase (ya aplicada); sin ella, los nombres de miembros caen al fallback "Alguien".
+> - Gamificación (§7 del spec): "mensajes positivos" quedaron como un saludo contextual en Home
+>   (`homeGreetingMessage`) y confetti; no se implementó un sistema de mensajes tipo toast separado
+>   para cada gasto ni el resumen "wrapped" de cierre de período con totales/categoría top.
+
+### Fase 1 — Fundación y dominio ✅ Completada
 - Setup del stack (§3), Tailwind, estructura de carpetas (§4), configuración Vitest.
 - Implementar `domain/` completo con los 6 casos de prueba de §6 en verde.
 - Esquema Dexie + repos locales para Period, Category, Expense, ExtraIncome.
 - **Aceptación**: `npm run test` verde; `npm run build` sin errores.
 
-### Fase 2 — UI núcleo (solo local)
+### Fase 2 — UI núcleo (solo local) ✅ Completada
 - Onboarding: ingresar dinero actual + fecha del próximo sueldo + **monto** del próximo sueldo (`nextSalaryAmount`) ⇒ crea período activo.
 - Home: PD del día y Disponible grande y central (verde/rojo), PD_sugerido secundario, acceso rápido "Registrar gasto".
 - CRUD de gastos por fecha con categoría; CRUD de categorías (icono + color); ingresos extra.
@@ -193,31 +204,48 @@ Con ese período hipotético (sin expenses/extraIncomes propios todavía) se vue
 - Calendario (§6.1): grilla del período (+ proyección del período siguiente si hay `nextSalaryAmount`) con Disponible histórico y proyectado por día, código de color verde/rojo, distinción visual de días futuros/período siguiente, y marcado de fechas de inicio/fin de metas.
 - **Aceptación**: flujo completo usable offline; datos persisten al recargar; ejemplo canónico reproducible manualmente; caso de proyección de §6.1 reproducible manualmente en el calendario, incluida la extensión al período siguiente y las fechas de metas.
 
-### Fase 3 — Metas y gamificación
+### Fase 3 — Metas y gamificación ✅ Completada
 - CRUD de metas individuales; efecto en PD_efectivo visible en Home; barra de progreso animada con hitos 25/50/75/100 %.
 - Registro de aportes (`goal_contributions`).
 - Motor de gamificación (§7): rachas, XP, niveles, logros, confetti, mensajes.
 - **Aceptación**: crear meta $300/30 días baja el PD $10; cumplir una meta dispara celebración y logro.
 
-### Fase 4 — PWA
+### Fase 4 — PWA ✅ Completada
 - `vite-plugin-pwa`: manifest completo (nombre "Presupuesto Diario", `display: standalone`, `theme_color`, iconos maskable 192/512, shortcut "Registrar gasto").
 - SW con precache del shell; `registerType: 'prompt'` + banner "Nueva versión disponible — Actualizar" (skipWaiting + reload); chequeo de update cada 60 min y al recuperar foco de la ventana.
 - Datos de Supabase con estrategia network-first y sin cachear información sensible.
 - **Aceptación**: Lighthouse marca la app como instalable; simular un deploy nuevo muestra el banner de actualización.
 
-### Fase 5 — Auth y sincronización
+### Fase 5 — Auth y sincronización ✅ Completada (parcial: sin Google)
 - Migraciones SQL + RLS (§5); Supabase Auth (email + Google).
 - Merge inicial al loguear: subir datos locales (upsert por UUID); luego outbox: cada mutación local se encola y se empuja al haber sesión + conexión; pull al abrir la app.
 - **Aceptación**: mismos datos en dos navegadores con la misma cuenta; la app sigue 100 % funcional sin sesión.
 
-### Fase 6 — Metas conjuntas
+### Fase 6 — Metas conjuntas ✅ Completada
 - Crear meta compartida ⇒ código/enlace de invitación; unirse crea fila en `goal_members`.
 - Progreso = suma de aportes de todos; Realtime actualiza en vivo y muestra toast ("¡{nombre} aportó $X!").
-- **Aceptación**: dos cuentas ven el mismo progreso en tiempo real.
+- **Aceptación**: dos cuentas ven el mismo progreso en tiempo real. Verificado con una cuenta real
+  (crear meta compartida, invitar por enlace `?join=<id>`, unirse, ver miembros y cuota sugerida);
+  el camino de Realtime + toast entre dos cuentas simultáneas distintas no se probó en vivo, pero
+  reutiliza el mismo mecanismo RLS + Realtime ya validado en la Fase 5.
 
-### Fase 7 — Despliegue y pulido
-- Repo en GitHub; conectar Cloudflare Pages (build `npm run build`, output `dist/`, env vars de §3); verificar previews por PR y deploy automático en `main`.
-- Lighthouse ≥ 90 en PWA/Performance/Accesibilidad; revisar todos los textos en español; README con instrucciones de desarrollo y despliegue.
+### Fase 7 — Despliegue y pulido ⏳ En curso
+- Repo en GitHub ✅ (`luisonboard/metas-financieras`). Conexión de Cloudflare Pages requiere login/OAuth
+  del usuario en el dashboard — **pendiente de acción manual**: Workers & Pages → Connect to Git →
+  build command `npm run build`, output `dist`, env vars `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`
+  (ver instrucciones detalladas en README). Una vez conectado, verificar en la práctica que un PR
+  genera preview y que el push a `main` dispara el deploy de producción.
+- Lighthouse (local, `npm run preview` + Chrome DevTools MCP, `localhost`, mobile): Accesibilidad 100,
+  Best Practices 100, SEO 100 (se corrigió `landmark-one-main` envolviendo Onboarding/CierrePeriodo/loading
+  en `<main>`, y se agregó `public/robots.txt`). Se aplicó code-splitting con `React.lazy` en
+  Gastos/Calendario/Metas/Perfil/CierrePeriodo, bajando el bundle inicial de 729 KB a ~325 KB. La
+  categoría "PWA" ya no existe como tal en las versiones recientes de Lighthouse (se retiró del
+  reporte estándar); la instalabilidad se verificó manualmente en Fase 4. El Performance real bajo
+  throttling de red/CPU de un Lighthouse contra la URL pública de Cloudflare **queda pendiente de
+  medir una vez desplegado**, ya que el entorno local no lo simula fielmente.
+- Textos en español ✅ (auditoría por grep en `src/ui` sin hallazgos; los strings en inglés restantes
+  son identificadores internos de tipo, no UI).
+- README ✅ actualizado con instrucciones de desarrollo, Supabase y despliegue en Cloudflare Pages.
 
 ## 10. Convenciones
 
