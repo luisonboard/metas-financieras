@@ -38,13 +38,13 @@ export function cuotaMeta(goal: Pick<Goal, 'targetAmount' | 'startDate' | 'endDa
   return goal.targetAmount / dias
 }
 
-/** Una meta descuenta en `dia` si estaba activa ese día: activa hoy, o lo estuvo hasta el día
+/** Una meta descuenta en `dia` si estaba activa ese día: activa hoy, o lo estuvo hasta antes del día
  * de su cambio de estado (aproximado con `updatedAt`, ya que no hay historial de estados). */
 function metaAplicaEnDia(goal: GoalRange, dia: ISODate): boolean {
   if (!inRange(dia, goal.startDate, goal.endDate)) return false
   if (goal.status === 'active') return true
   const fechaCambio = goal.updatedAt.slice(0, 10)
-  return dia <= fechaCambio
+  return dia < fechaCambio
 }
 
 export function pdEfectivo(period: PeriodDates, goals: GoalRange[], dia: ISODate): number {

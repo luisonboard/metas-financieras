@@ -7,22 +7,26 @@ import { expenseFeedbackMessage, expenseGoalImpactMessage, goalBackOnTrack } fro
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../components/categoryPresets'
 import type { Category, Expense } from '../../domain/types'
 
-type Tab = 'gastos' | 'ingresos' | 'categorias'
+export type GastosTab = 'gastos' | 'ingresos' | 'categorias'
 
-const TAB_LABELS: Record<Tab, string> = {
+const TAB_LABELS: Record<GastosTab, string> = {
   gastos: 'Gastos',
   ingresos: 'Ingresos extra',
   categorias: 'Categorías',
 }
 
-export default function Gastos() {
-  const [tab, setTab] = useState<Tab>('gastos')
+interface Props {
+  initialTab?: GastosTab
+}
+
+export default function Gastos({ initialTab }: Props) {
+  const [tab, setTab] = useState<GastosTab>(initialTab ?? 'gastos')
 
   return (
     <div className="flex flex-col gap-4 p-6">
       <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Gastos</h1>
       <div className="flex gap-1 rounded-xl bg-neutral-100 p-1 dark:bg-neutral-900">
-        {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
+        {(Object.keys(TAB_LABELS) as GastosTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
