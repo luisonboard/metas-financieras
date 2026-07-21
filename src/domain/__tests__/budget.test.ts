@@ -113,7 +113,7 @@ describe('budget domain', () => {
     expect(disponible(period, [], [], expenses, '2026-01-02')).toBeLessThan(0)
   })
 
-  it('caso 5: una meta que pasa a "achieved" deja de descontar desde el día siguiente al cambio', () => {
+  it('caso 5: una meta que pasa a "achieved" deja de descontar desde el mismo día del cambio', () => {
     const period = makePeriod({ initialMoney: 250, startDate: '2026-01-01', nextPaydayDate: '2026-01-11' }) // PD_base = 25
     const goal = makeGoal({
       targetAmount: 300,
@@ -123,8 +123,8 @@ describe('budget domain', () => {
       updatedAt: '2026-01-05T10:00:00.000Z', // cambió de estado el 5 de enero
     })
 
-    expect(pdEfectivo(period, [goal], '2026-01-05')).toBe(15) // día del cambio: sigue descontando
-    expect(pdEfectivo(period, [goal], '2026-01-06')).toBe(25) // día siguiente: ya no descuenta
+    expect(pdEfectivo(period, [goal], '2026-01-04')).toBe(15) // día anterior: seguía activa
+    expect(pdEfectivo(period, [goal], '2026-01-05')).toBe(25) // día del cambio: ya no descuenta
   })
 
   it('caso 6: gastos con fecha futura dentro del período solo cuentan cuando date ≤ hoy', () => {

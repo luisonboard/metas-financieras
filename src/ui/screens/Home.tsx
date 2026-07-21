@@ -22,7 +22,10 @@ export default function Home({ onNavigate }: Props) {
 
   const expensesHoy = useMemo(() => expenses.filter((e) => e.date === hoy), [expenses, hoy])
   const incomesHoy = useMemo(() => extraIncomes.filter((e) => e.date === hoy), [extraIncomes, hoy])
-  const goalsHoy = useMemo(() => goals.filter((g) => g.startDate <= hoy && hoy <= g.endDate), [goals, hoy])
+  const goalsHoy = useMemo(
+    () => goals.filter((g) => g.status !== 'abandoned' && g.startDate <= hoy && hoy <= g.endDate),
+    [goals, hoy],
+  )
 
   if (!period) return null
 

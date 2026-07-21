@@ -43,7 +43,7 @@ export default function Calendario() {
     if (!period) return hoy
     let max = period.nextPaydayDate
     for (const g of goals) {
-      if (g.endDate > max) max = g.endDate
+      if (g.status !== 'abandoned' && g.endDate > max) max = g.endDate
     }
     for (const fecha of fechaEstimadaPorFecha.keys()) {
       if (fecha > max) max = fecha
@@ -69,6 +69,7 @@ export default function Calendario() {
   const goalsPorFecha = useMemo(() => {
     const map = new Map<string, Goal[]>()
     for (const goal of goals) {
+      if (goal.status === 'abandoned') continue
       let cursor = parseISO(goal.startDate)
       const fin = parseISO(goal.endDate)
       while (cursor <= fin) {

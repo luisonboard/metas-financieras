@@ -245,6 +245,7 @@ function GoalCard({ goal }: { goal: Goal }) {
 
   const addGoalContribution = useBudgetStore((s) => s.addGoalContribution)
   const updateGoalStatus = useBudgetStore((s) => s.updateGoalStatus)
+  const deleteGoal = useBudgetStore((s) => s.deleteGoal)
   const period = useBudgetStore((s) => s.period)
   const extraIncomes = useBudgetStore((s) => s.extraIncomes)
   const expenses = useBudgetStore((s) => s.expenses)
@@ -291,6 +292,11 @@ function GoalCard({ goal }: { goal: Goal }) {
       })
       celebrate()
     }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`¿Eliminar la meta "${goal.name}"? Esta acción no se puede deshacer.`)) return
+    await deleteGoal(goal.id)
   }
 
   async function handleCopyInvite() {
@@ -397,6 +403,27 @@ function GoalCard({ goal }: { goal: Goal }) {
             Abandonar
           </button>
         </form>
+      )}
+
+      {goal.status === 'abandoned' && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => updateGoalStatus(goal.id, 'active')}
+            className="shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
+          >
+            Retomar
+          </button>
+          {!goal.isShared && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="shrink-0 rounded-xl border border-red-300 px-3 py-2 text-sm text-red-500 dark:border-red-900/60 dark:text-red-400"
+            >
+              Eliminar
+            </button>
+          )}
+        </div>
       )}
     </motion.div>
   )
